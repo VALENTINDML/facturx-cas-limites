@@ -37,6 +37,28 @@ ci-dessous : c'est celui qui révèle les désaccords entre implémentations
 
 Les documents sont fictifs et sans valeur légale.
 
+## Comment lire les résultats
+
+**Un cas attendu en rejet est accepté.** Les données du document entrent
+telles quelles. `CALC-001` porte un total TTC qui ne vaut pas HT + TVA :
+accepté, la facture est enregistrée avec ce montant, et l'écart réapparaît
+au lettrage ou sur la déclaration de TVA, sans que rien ne désigne son
+origine.
+
+**Le témoin `OK-001` est rejeté.** Les factures conformes de vos partenaires
+suivront le même chemin. C'est le premier test à passer : tant qu'il échoue,
+les 31 autres résultats ne sont pas interprétables.
+
+**Un cas est rejeté, mais le message ne nomme pas la règle.** L'émetteur
+reçoit un refus sans savoir quoi corriger, et rappelle. Chaque fiche indique
+l'assertion attendue (`BR-CO-15`, `BR-FR-CO-07_BT-9`…) et son libellé
+officiel : la comparaison avec votre message mesure l'écart précisément.
+
+**Les cinq cas non normés admettent plusieurs comportements corrects.** Un
+écart y traduit un choix d'implémentation, pas un défaut : ces cas se
+tranchent contractuellement avec vos partenaires plutôt qu'ils ne se
+corrigent.
+
 ## Le témoin OK-001
 
 `cas/OK-001/` est une facture Factur-X profil BASIC, conforme EN 16931 et au
@@ -59,9 +81,10 @@ DejaVu sur Linux, Arial sur macOS — et le XML est identique quelle qu'elle
 soit : deux PDF produits sur des machines différentes peuvent donc différer
 sans que le corpus ait changé.
 
-
+<!-- EMPLACEMENT CAPTURE D'ÉCRAN — validateur FNFE-MPE (services.fnfe-mpe.org).
+     Déposer l'image dans docs/ puis décommenter la ligne ci-dessous :
 ![OK-001 validé « Fully valid » par le validateur FNFE-MPE](docs/ok-001-fnfe.png)
-
+     Ce bloc est un commentaire : le README reste publiable en l'état. -->
 
 **Conformité PDF/A-3.** La génération embarque un profil ICC sRGB, souscrit
 les polices et déclare le schéma d'extension XMP Factur-X ; elle **échoue
