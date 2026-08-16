@@ -19,12 +19,14 @@ Ce corpus sert à tester sa propre implémentation, ou une implémentation
 publique et librement accessible. Ne jamais soumettre ces fichiers au système
 de production d'un tiers sans y avoir été invité par écrit.
 
-LIMITES ASSUMÉES — à lire avant de publier quoi que ce soit
-La conformité PDF/A-3 produite ici est approchée : le profil ICC n'est pas
-embarqué et les polices ne sont pas intégralement souscrites. Les fichiers
-sont donc valides pour tester l'extraction et la validation du XML, mais ne
-doivent pas servir de référence de conformité PDF/A-3. Les cas marqués
-`pdfa_approximatif` le signalent explicitement.
+CONFORMITÉ PDF/A-3
+La génération exige une paire de polices TrueType à souscrire et un profil
+ICC sRGB à embarquer. `generate` échoue explicitement s'ils manquent — un
+défaut se signale, il ne se corrige jamais en silence. Le drapeau
+`--sans-pdfa` permet de générer sans ces ressources, en connaissance de
+cause : les PDF ne sont alors pas conformes PDF/A-3, ce que le manifeste et
+le README généré indiquent, mais le XML reste pleinement utilisable pour
+éprouver l'extraction et la validation.
 """
 
 import argparse
@@ -53,10 +55,111 @@ PROFIL_BASIC = "urn:cen.eu:en16931:2017#compliant#urn:factur-x.eu:1p0:basic"
 PROFIL_MINIMUM = "urn:factur-x.eu:1p0:minimum"
 PROFIL_EN16931 = "urn:cen.eu:en16931:2017"
 
-# Ressources PDF/A-3. Adapter si absentes du système.
-CHEMIN_POLICE = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
-CHEMIN_POLICE_GRAS = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-CHEMIN_ICC = "/usr/share/texlive/texmf-dist/tex/generic/colorprofiles/sRGB.icc"
+# Ressources PDF/A-3 — polices à souscrire et profil ICC sRGB à embarquer.
+# Résolution : variables d'environnement d'abord, puis emplacements usuels.
+# DejaVu en tête (licence libre) ; à défaut, une police système
+# souscriptible fait l'affaire — PDF/A-3 exige l'embarquement, pas une
+# police en particulier.
+ENV_POLICE = "FACTURX_POLICE"
+ENV_POLICE_GRAS = "FACTURX_POLICE_GRAS"
+ENV_ICC = "FACTURX_ICC"
+
+POLICES_CANDIDATES = [
+    # (normale, grasse)
+    ("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),   # Debian/Ubuntu
+    ("/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
+     "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf"),  # Fedora
+    ("/usr/share/fonts/TTF/DejaVuSans.ttf",
+     "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf"),                # Arch
+    ("/System/Library/Fonts/Supplemental/Arial.ttf",
+     "/System/Library/Fonts/Supplemental/Arial Bold.ttf"),       # macOS
+    ("/System/Library/Fonts/Supplemental/Verdana.ttf",
+     "/System/Library/Fonts/Supplemental/Verdana Bold.ttf"),     # macOS
+    ("C:/Windows/Fonts/arial.ttf",
+     "C:/Windows/Fonts/arialbd.ttf"),                            # Windows
+]
+
+ICC_CANDIDATS = [
+    "/usr/share/texlive/texmf-dist/tex/generic/colorprofiles/sRGB.icc",
+    "/usr/share/color/icc/sRGB.icc",
+    "/usr/share/color/icc/colord/sRGB.icc",                      # colord
+    "/System/Library/ColorSync/Profiles/sRGB Profile.icc",       # macOS
+    "C:/Windows/System32/spool/drivers/color/sRGB Color Space Profile.icm",
+]
+
+
+def resoudre_ressources_pdfa():
+    """Trouve la paire de polices et le profil ICC, ou explique l'échec.
+
+    Renvoie ({"police": ..., "grasse": ..., "icc": ...}, None) en cas de
+    succès, (None, message) sinon. Le message nomme ce qui manque, où la
+    recherche a eu lieu, et comment y remédier : un utilisateur sur une
+    machine nue doit comprendre en le lisant.
+    """
+    env_p = os.environ.get(ENV_POLICE)
+    env_g = os.environ.get(ENV_POLICE_GRAS)
+    env_i = os.environ.get(ENV_ICC)
+
+    police = grasse = None
+    if env_p:
+        if os.path.exists(env_p):
+            police = env_p
+            grasse = env_g if env_g and os.path.exists(env_g) else env_p
+    else:
+        for p, g in POLICES_CANDIDATES:
+            if os.path.exists(p) and os.path.exists(g):
+                police, grasse = p, g
+                break
+
+    icc = None
+    if env_i:
+        if os.path.exists(env_i):
+            icc = env_i
+    else:
+        for c in ICC_CANDIDATS:
+            if os.path.exists(c):
+                icc = c
+                break
+
+    if police and icc:
+        return {"police": police, "grasse": grasse, "icc": icc}, None
+
+    L = ["ressources PDF/A-3 introuvables — la génération conforme est "
+         "impossible sur cette machine.", ""]
+    if not police:
+        if env_p:
+            L.append(f"  Polices : {ENV_POLICE}={env_p} ne pointe pas vers "
+                     "un fichier existant.")
+        else:
+            L.append("  Polices TrueType à souscrire : aucune paire "
+                     "(normale + grasse) trouvée parmi :")
+            L += [f"    - {p}" for p, _ in POLICES_CANDIDATES]
+    else:
+        L.append(f"  Polices : trouvées ({police}).")
+    if not icc:
+        if env_i:
+            L.append(f"  Profil ICC : {ENV_ICC}={env_i} ne pointe pas vers "
+                     "un fichier existant.")
+        else:
+            L.append("  Profil ICC sRGB : aucun trouvé parmi :")
+            L += [f"    - {c}" for c in ICC_CANDIDATS]
+    else:
+        L.append(f"  Profil ICC : trouvé ({icc}).")
+    L += ["",
+          "  Pour corriger, au choix :",
+          "    - installer DejaVu (Debian/Ubuntu : apt install fonts-dejavu ;"
+          " Fedora : dnf install dejavu-sans-fonts) et/ou un profil sRGB "
+          "(paquet colord ou icc-profiles-free) ;",
+          f"    - pointer {ENV_POLICE}, {ENV_POLICE_GRAS} et {ENV_ICC} vers "
+          "des fichiers valides (police TrueType .ttf, profil .icc/.icm) ;",
+          "    - générer sans conformité PDF/A-3, en connaissance de cause :",
+          "        python3 corpus_facturx.py generate --sans-pdfa",
+          "      Les PDF ne seront pas conformes PDF/A-3 (polices non "
+          "embarquées, profil ICC absent) ; le XML embarqué reste "
+          "pleinement utilisable pour éprouver l'extraction et la "
+          "validation."]
+    return None, "\n".join(L)
 
 
 def facture_reference():
@@ -302,8 +405,14 @@ def construire_xml(f, t=None):
 # Fabrication du PDF porteur
 # ---------------------------------------------------------------------------
 
-def construire_pdf(xml_bytes, f, chemin, options=None):
-    """PDF lisible + XML embarqué. `options` déclenche les défauts PDF."""
+def construire_pdf(xml_bytes, f, chemin, options=None, ressources=None):
+    """PDF lisible + XML embarqué. `options` déclenche les défauts PDF.
+
+    `ressources` vient de resoudre_ressources_pdfa(). None = génération
+    `--sans-pdfa`, demandée explicitement : polices base 14 non embarquées
+    et OutputIntent sans profil — jamais un repli silencieux. Un échec de
+    souscription des polices est une erreur, elle remonte.
+    """
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.pdfgen import canvas as rl_canvas
@@ -312,16 +421,13 @@ def construire_pdf(xml_bytes, f, chemin, options=None):
     import pikepdf
 
     # PDF/A-3 exige des polices embarquées : Helvetica (base 14) ne l'est
-    # jamais. On souscrit DejaVu, présente sur la plupart des systèmes.
-    police, police_g = "Helvetica", "Helvetica-Bold"
-    for base, gras in ((CHEMIN_POLICE, CHEMIN_POLICE_GRAS),):
-        if base and os.path.exists(base):
-            try:
-                pdfmetrics.registerFont(TTFont("Corpus", base))
-                pdfmetrics.registerFont(TTFont("Corpus-Bold", gras))
-                police, police_g = "Corpus", "Corpus-Bold"
-            except Exception:
-                pass
+    # jamais.
+    if ressources:
+        pdfmetrics.registerFont(TTFont("Corpus", ressources["police"]))
+        pdfmetrics.registerFont(TTFont("Corpus-Bold", ressources["grasse"]))
+        police, police_g = "Corpus", "Corpus-Bold"
+    else:
+        police, police_g = "Helvetica", "Helvetica-Bold"
 
     o = options or {}
     tmp = chemin + ".tmp"
@@ -423,8 +529,8 @@ def construire_pdf(xml_bytes, f, chemin, options=None):
     if not o.get("sans_pdfa"):
         # Sans profil ICC embarqué, veraPDF rejette tout usage de DeviceGray.
         icc = None
-        if CHEMIN_ICC and os.path.exists(CHEMIN_ICC):
-            with open(CHEMIN_ICC, "rb") as fh:
+        if ressources:
+            with open(ressources["icc"], "rb") as fh:
                 icc = pdf.make_stream(fh.read())
             icc.stream_dict["/N"] = 3
         oi = pikepdf.Dictionary(
@@ -706,7 +812,6 @@ class Cas:
     muter_facture: Optional[Callable] = None
     muter_xml: Optional[Callable] = None
     options_pdf: dict = field(default_factory=dict)
-    approximatif: bool = False
 
 
 def catalogue():
@@ -802,12 +907,15 @@ def catalogue():
     C.append(Cas(
         "PDF-007", "Pas de PDF/A (OutputIntent absent)", "structure PDF",
         "ISO 19005-3 — conformité PDF/A-3", "rejet",
-        "PDF ordinaire portant un XML Factur-X. Hors schematron : le XML "
-        "embarqué reste, lui, parfaitement valide.",
+        "PDF ordinaire portant un XML Factur-X : l'OutputIntent est retiré "
+        "volontairement à la construction. La non-conformité PDF/A-3 est "
+        "ici le défaut injecté, pas un artefact du générateur — les 31 "
+        "autres cas embarquent profil ICC et polices. Hors schematron : le "
+        "XML embarqué reste, lui, parfaitement valide.",
         piege="Techniquement exploitable, réglementairement non conforme — "
               "c'est le défaut le plus fréquent des générateurs maison.",
         source="ISO 19005-3",
-        options_pdf={"sans_pdfa": True}, approximatif=True,
+        options_pdf={"sans_pdfa": True},
     ))
     C.append(Cas(
         "PDF-008", "Entrée /AF absente à la racine", "structure PDF",
@@ -1307,7 +1415,7 @@ def catalogue():
 # Génération
 # ---------------------------------------------------------------------------
 
-def generer_cas(cas, racine):
+def generer_cas(cas, racine, ressources=None):
     f = facture_reference()
     if cas.muter_facture:
         f = cas.muter_facture(copy.deepcopy(f))
@@ -1332,7 +1440,7 @@ def generer_cas(cas, racine):
         fh.write(octets)
 
     chemin_pdf = os.path.join(dossier, "facture.pdf")
-    construire_pdf(octets, f, chemin_pdf, cas.options_pdf)
+    construire_pdf(octets, f, chemin_pdf, cas.options_pdf, ressources)
 
     with open(os.path.join(dossier, "README.md"), "w", encoding="utf-8") as fh:
         fh.write(fiche_cas(cas, octets, chemin_pdf))
@@ -1344,16 +1452,12 @@ def generer_cas(cas, racine):
         "nature": nature, "assertions_declenchees": assertions,
         "source": cas.source, "libelle_officiel": cas.libelle_officiel,
         "description": cas.description, "piege": cas.piege,
-        "pdfa_approximatif": cas.approximatif,
         "sha256_xml": hashlib.sha256(octets).hexdigest()[:16],
         "taille_pdf": os.path.getsize(chemin_pdf),
     }
 
 
 def fiche_cas(cas, octets, chemin_pdf):
-    avert = ("\n> Ce cas porte sur la conformité PDF/A-3, produite ici de "
-             "façon approchée (profil ICC non embarqué). Le résultat est "
-             "indicatif.\n" if cas.approximatif else "")
     officiel = (f"| Libellé officiel | {cas.libelle_officiel} |\n"
                 if cas.libelle_officiel else "")
     nature, assertions = CLASSEMENT[cas.ref]
@@ -1380,7 +1484,7 @@ officiels (versions en tête du README du corpus). La référence du cas
 ## Pourquoi une implémentation le rate
 
 {cas.piege or "—"}
-{avert}
+
 ## Fichiers
 
 - `facture.pdf` — le document complet
@@ -1398,7 +1502,29 @@ Corpus de test Factur-X. Documents fictifs, sans valeur légale.
 """
 
 
-def commande_generate(sortie):
+NOTE_SANS_PDFA = (
+    "Corpus généré avec --sans-pdfa : les PDF ne sont pas conformes "
+    "PDF/A-3 — polices base 14 non embarquées, profil ICC absent — parce "
+    "que les ressources d'embarquement n'étaient pas disponibles à la "
+    "génération. Le XML embarqué est rigoureusement le même qu'en "
+    "génération conforme (reproductible à l'octet) : ce corpus reste "
+    "pleinement utilisable pour éprouver l'extraction et la validation du "
+    "XML. Seuls les cas dont le verdict porte sur la conformité PDF/A-3 "
+    "elle-même (PDF-003, PDF-007 notamment) perdent leur valeur de test.")
+
+
+def commande_generate(sortie, sans_pdfa=False):
+    # La résolution des ressources se fait AVANT d'effacer la sortie : un
+    # échec ne doit pas détruire un corpus existant.
+    ressources = None
+    if sans_pdfa:
+        print("génération --sans-pdfa : PDF non conformes PDF/A-3, "
+              "signalé dans le manifeste et le README.", file=sys.stderr)
+    else:
+        ressources, erreur = resoudre_ressources_pdfa()
+        if erreur:
+            sys.exit(erreur)
+
     if os.path.exists(sortie):
         shutil.rmtree(sortie)
     os.makedirs(sortie)
@@ -1407,26 +1533,37 @@ def commande_generate(sortie):
     resultats = []
     for c in cas_list:
         try:
-            resultats.append(generer_cas(c, sortie))
+            resultats.append(generer_cas(c, sortie, ressources))
             print(f"  {c.ref:<9} {c.titre}")
         except Exception as e:
             print(f"  {c.ref:<9} ÉCHEC — {e}", file=sys.stderr)
+
+    pdfa = {
+        "conforme": bool(ressources),
+        "polices": (os.path.basename(ressources["police"])
+                    if ressources else None),
+        "profil_icc": (os.path.basename(ressources["icc"])
+                       if ressources else None),
+    }
+    if not ressources:
+        pdfa["note"] = NOTE_SANS_PDFA
 
     with open(os.path.join(sortie, "manifeste.json"), "w",
               encoding="utf-8") as fh:
         json.dump({"genere_le": date.today().isoformat(),
                    "references_normatives": VERIF_SCHEMATRONS,
+                   "pdfa": pdfa,
                    "nombre_de_cas": len(resultats),
                    "cas": resultats}, fh, ensure_ascii=False, indent=2)
 
     with open(os.path.join(sortie, "README.md"), "w", encoding="utf-8") as fh:
-        fh.write(readme_global(resultats))
+        fh.write(readme_global(resultats, pdfa))
 
     print(f"\n{len(resultats)} cas générés dans {sortie}/")
     return resultats
 
 
-def readme_global(resultats):
+def readme_global(resultats, pdfa=None):
     par_nature = {}
     for r in resultats:
         par_nature.setdefault(r["nature"], []).append(r)
@@ -1520,12 +1657,18 @@ def readme_global(resultats):
     L += [f"| `{a}` | `{n}` |" for a, n in RENOMMAGE]
     L += ["", "`OK-001`, `PDF-00x`, `XML-00x`, `PRF-00x` et `RBT-00x` sont "
           "inchangés : aucune ambiguïté possible avec un code normatif.", "",
-          "## Limites", "",
-          "La conformité PDF/A-3 est produite de façon approchée : le profil "
-          "ICC n'est pas embarqué. Les cas concernés sont signalés. Le corpus "
-          "est fiable pour tester l'extraction et la validation du XML, pas "
-          "pour certifier une conformité PDF/A-3.", "",
-          "## Structure", "",
+          "## Conformité PDF/A-3 de cette génération", ""]
+    if pdfa and pdfa.get("conforme"):
+        L += [f"Générée avec polices souscrites ({pdfa['polices']}) et "
+              f"profil ICC embarqué ({pdfa['profil_icc']}), schéma "
+              "d'extension XMP Factur-X déclaré. La seule exception est "
+              "`PDF-007`, dont la non-conformité PDF/A-3 est le défaut "
+              "injecté. La génération échoue explicitement quand ces "
+              "ressources manquent — un corpus produit sans elles porte la "
+              "mention `--sans-pdfa` dans son manifeste.", ""]
+    else:
+        L += [NOTE_SANS_PDFA, ""]
+    L += ["## Structure", "",
           "```", "CAS-XXX/", "  facture.pdf     document complet",
           "  factur-x.xml    XML seul", "  README.md       description du défaut",
           "```", "",
@@ -1553,12 +1696,17 @@ def main():
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("commande", choices=["list", "generate", "manifest"])
     ap.add_argument("--out", default="./cas")
+    ap.add_argument("--sans-pdfa", action="store_true",
+                    help="générer sans polices souscrites ni profil ICC : "
+                         "PDF non conformes PDF/A-3, signalé dans le "
+                         "manifeste ; le XML reste identique et pleinement "
+                         "utilisable")
     args = ap.parse_args()
 
     if args.commande == "list":
         commande_list()
     elif args.commande == "generate":
-        commande_generate(args.out)
+        commande_generate(args.out, args.sans_pdfa)
     else:
         chemin = os.path.join(args.out, "manifeste.json")
         if not os.path.exists(chemin):

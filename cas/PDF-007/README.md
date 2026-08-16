@@ -14,13 +14,11 @@ officiels (versions en tête du README du corpus). La référence du cas
 
 ## Le défaut
 
-PDF ordinaire portant un XML Factur-X. Hors schematron : le XML embarqué reste, lui, parfaitement valide.
+PDF ordinaire portant un XML Factur-X : l'OutputIntent est retiré volontairement à la construction. La non-conformité PDF/A-3 est ici le défaut injecté, pas un artefact du générateur — les 31 autres cas embarquent profil ICC et polices. Hors schematron : le XML embarqué reste, lui, parfaitement valide.
 
 ## Pourquoi une implémentation le rate
 
 Techniquement exploitable, réglementairement non conforme — c'est le défaut le plus fréquent des générateurs maison.
-
-> Ce cas porte sur la conformité PDF/A-3, produite ici de façon approchée (profil ICC non embarqué). Le résultat est indicatif.
 
 ## Fichiers
 

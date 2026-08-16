@@ -12,6 +12,13 @@ python3 corpus_facturx.py list       # catalogue des 32 cas
 python3 corpus_facturx.py generate   # écrit dans ./cas
 ```
 
+La génération exige une paire de polices TrueType à souscrire et un profil
+ICC sRGB à embarquer, sans quoi les PDF ne seraient pas conformes PDF/A-3.
+Ils sont trouvés automatiquement sur Linux, macOS et Windows ; à défaut,
+pointez `FACTURX_POLICE`, `FACTURX_POLICE_GRAS` et `FACTURX_ICC` vers des
+fichiers valides. Pour générer sans ces ressources, en connaissance de
+cause : `python3 corpus_facturx.py generate --sans-pdfa`.
+
 Chaque cas produit un dossier :
 
 ```
@@ -47,22 +54,32 @@ Empreinte du XML validé :
 
 La génération est déterministe : le XML est reproductible à l'octet. Seuls
 `CreationDate`, `ModDate` et `/ID` du PDF varient d'une exécution à l'autre.
+Les polices embarquées, elles, dépendent de la machine de génération —
+DejaVu sur Linux, Arial sur macOS — et le XML est identique quelle qu'elle
+soit : deux PDF produits sur des machines différentes peuvent donc différer
+sans que le corpus ait changé.
 
 <!-- EMPLACEMENT CAPTURE D'ÉCRAN — validateur FNFE-MPE (services.fnfe-mpe.org).
      Déposer l'image dans docs/ puis décommenter la ligne ci-dessous :
 ![OK-001 validé « Fully valid » par le validateur FNFE-MPE](docs/ok-001-fnfe.png)
      Ce bloc est un commentaire : le README reste publiable en l'état. -->
 
-**Limite du PDF.** La conformité PDF/A-3 est produite de façon approchée : le
-profil ICC n'est pas embarqué et les polices ne sont pas intégralement
-souscrites. Le corpus est fiable pour éprouver l'extraction et la validation
-du XML ; il ne certifie pas une conformité PDF/A-3. Les cas concernés portent
-le drapeau `pdfa_approximatif` dans le manifeste.
+**Conformité PDF/A-3.** La génération embarque un profil ICC sRGB, souscrit
+les polices et déclare le schéma d'extension XMP Factur-X ; elle **échoue
+explicitement** si polices ou profil manquent, en indiquant où elle a cherché
+et comment y remédier. `--sans-pdfa` permet de générer sans ces ressources :
+les PDF ne sont alors pas conformes PDF/A-3 — le manifeste
+(`pdfa.conforme: false`) et le README générés le disent — mais le XML est
+identique à l'octet et le corpus reste pleinement utilisable pour éprouver
+l'extraction et la validation. La seule non-conformité PDF/A-3 d'une
+génération complète est `PDF-007`, où c'est le défaut injecté.
 
 ## Les 32 cas, groupés par ce qu'ils testent
 
 Le groupement suit ce que chaque document déclenche réellement, mesuré, et
-non la famille dont le cas vient.
+non la famille dont le cas vient. Les quatre groupes ci-dessous couvrent les
+31 cas défectueux ; le trente-deuxième est le témoin `OK-001`, décrit plus
+haut.
 
 Les références (`OK-001`, `CALC-001`…) sont des **identifiants du corpus, pas
 des codes de norme**. Elles ont changé une fois, avant la première
