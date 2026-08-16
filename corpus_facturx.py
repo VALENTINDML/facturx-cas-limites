@@ -8,8 +8,8 @@ avec pour chacune la référence à la règle violée et le comportement attendu
 d'un validateur conforme.
 
     python3 corpus_facturx.py list                 # catalogue des cas
-    python3 corpus_facturx.py generate --out ./corpus
-    python3 corpus_facturx.py manifest --out ./corpus
+    python3 corpus_facturx.py generate             # écrit dans ./cas
+    python3 corpus_facturx.py manifest
 
 Chaque cas produit un dossier contenant la facture PDF, le XML seul, et une
 fiche décrivant le défaut. Un manifeste global récapitule l'ensemble.
@@ -1552,7 +1552,7 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("commande", choices=["list", "generate", "manifest"])
-    ap.add_argument("--out", default="./corpus")
+    ap.add_argument("--out", default="./cas")
     args = ap.parse_args()
 
     if args.commande == "list":
