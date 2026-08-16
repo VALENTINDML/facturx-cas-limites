@@ -81,10 +81,9 @@ DejaVu sur Linux, Arial sur macOS — et le XML est identique quelle qu'elle
 soit : deux PDF produits sur des machines différentes peuvent donc différer
 sans que le corpus ait changé.
 
-<!-- EMPLACEMENT CAPTURE D'ÉCRAN — validateur FNFE-MPE (services.fnfe-mpe.org).
-     Déposer l'image dans docs/ puis décommenter la ligne ci-dessous :
+
 ![OK-001 validé « Fully valid » par le validateur FNFE-MPE](docs/ok-001-fnfe.png)
-     Ce bloc est un commentaire : le README reste publiable en l'état. -->
+
 
 **Conformité PDF/A-3.** La génération embarque un profil ICC sRGB, souscrit
 les polices et déclare le schéma d'extension XMP Factur-X ; elle **échoue
